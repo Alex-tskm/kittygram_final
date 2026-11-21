@@ -1,0 +1,53 @@
+volumes:
+  pg_data:
+  static:
+  media:
+
+services:
+  db:
+    image: postgres:13
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kittygram_user -d kittygram"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  backend:
+    image: alextskm/kittygram_backend:latest
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8000/api/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - static:/app/collected_static
+      - media:/app/media
+
+  frontend:
+    image: alextskm/kittygram_frontend:latest
+    env_file: .env
+    command: sh -c "cp -r /app/build/. /static/ && cp -r /app/build/static/. /static/"
+    volumes:
+      - static:/static
+
+  gateway:
+    image: alextskm/kittygram_gateway:latest
+    env_file: .env
+    ports:
+      - 9000:80
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: on-failure
+    volumes:
+      - static:/static
+      - media:/media
